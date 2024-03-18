@@ -1,0 +1,150 @@
+---
+title: "ESM 244 Assignment 4 Task 1"
+author: "Jesse Landesman"
+format: 
+  html:
+    embed-resources: true
+    code-fold: true
+editor: visual
+theme: zephyr
+execute:
+  warning: false
+  error: false
+---
+
+```{r setup}
+library(tidyverse)
+library(here)
+library(ggfortify)
+library(janitor)
+```
+
+# Overview
+
+This data was collected at Coal Oil Point Reserve (COPR) and North Campus Open Space (NCOS) from July to September of 2023. 51 feldspar plots were sampled in the two locations. Feldspar plots were put in both wetland sites in 2018, after the restoration of NCOS from a golf course back into a wetland. The goal of the feldspar plots is to be able to quantify differences in the amount of sediment that has accumulated at different locations in the past five years.
+
+## Summary of the dataset
+
+The variables that we are looking at for this analysis are the following:
+
+-   elevation: the distance above sea level (in feet) of different plot sites
+-   bulk_density_g_cm3: the bulk density, or dry soil per known volume, of the soil in that plot location, taken as an average of three core samples (in grams/cm\^3)
+-   soil_moisture_percent: the soil moisture of the soil in this plot, taken as the wet soil wet minus the dry soil weight, divided by the dry soil weight, times 100.
+-   dry_veg_per_m: dry weight of all aboveground biomass collected from the 0.25 m\^2 plot, multiplied by four to get the dry biomass per meter.
+-   p_h: the pH of the soil at this plot.
+-   ec_m_s: the salinity of the soil at this plot, measured as the electrical conductivity in millisemens.
+-   percent_sand: the percent sand in the soil in this plot.
+-   percent_silt: the percent silt in the soil in this plot.
+-   percent_clay: the percent clay in the soil in this plot.
+-   average_sediment_accumulation: the amount of sediment that has accumulated on top of the layer of feldspar in the past five year, in centimeters.
+
+**Citation:** *Landesman, J., Hamilton, D., & King, J. (2023) "Sediment accumulation in restored wetland systems" \[in preparation\]*
+
+## Purpose of the analysis
+
+The purpose of this analysis is to see if there are similarities and differences between plots at the two locations, NCOS and COPR. We will also use this analysis to see if there are any relationships between variables that might help us infer why there might be differences in sediment accumulation between the plot locations.
+
+## Pseudocode 
+* read in and clean the data 
+* select only numeric variables to include in the pca analysis 
+* drop na values 
+* create the pca dataframe, using the cleaned and selected dataset 
+* use autplot through ggfortify to create a bipot of the pca, using the loadings 
+* create a screeplot to show what percentages each principle component contribute to
+
+```{r}
+sed_acc_df <- read_csv(here('data', 'most_updated_masters_data.csv')) %>% 
+  clean_names()
+
+wetland_df <- sed_acc_df %>% 
+  select('plot_location', 'elevation', 'bulk_density_g_cm3', 'soil_moisture_percent',
+         'dry_veg_per_m', 'p_h', 'ec_m_s', 'percent_sand', 
+         'percent_silt', 'percent_clay', 'average_sediment_accumulation') %>% 
+  drop_na()
+```
+
+```{r}
+wetland_pca <- wetland_df %>% 
+  select(-plot_location) %>% 
+  prcomp(scale = TRUE)
+```
+
+### biplot of the PCA
+
+```{r}
+# loadings_df <- data.frame(wetland_pca$rotation * 8) %>% ### 8x multiplier is arbitrary, to extend the length of the arrows
+#   mutate(axis = row.names(.))
+# 
+# new_pts_df <- data.frame(wetland_pca$x)
+# 
+# ggplot() +
+#   geom_point(data = new_pts_df, aes(x = PC1, y = PC2),
+#              color = 'blue') +
+#   geom_segment(data = loadings_df,
+#                x = 0, y = 0, aes(xend = PC1, yend = PC2, group = axis),
+#                arrow = arrow(length = unit(.25, 'cm'))) +
+#   geom_text(data = loadings_df,
+#             aes(x = PC1, y = PC2, label = axis), vjust = 0, nudge_y = .01) +
+#   theme_minimal()
+```
+
+```{r}
+#| fig-cap: "Figure 1. PCA biplot showing plots in NCOS and COPR distributed by principle components 1 and 2, showing the relationship with multiple parameters."
+
+autoplot(wetland_pca,
+     	data = wetland_df,
+     	loadings = TRUE,
+     	colour = 'plot_location',
+     	loadings.label = TRUE,
+     	loadings.colour = "black",
+     	loadings.label.colour = "black",
+     	loadings.label.vjust = -0.5
+     	) +
+  scale_color_manual(values = c('darkgreen', 'orange')) +
+  theme_minimal()
+```
+
+Summary of takeaways:
+
+-   elevation and salinity of the soil (ec_m_s) are inversely proportional
+
+    -   this makes sense because at higher elevations, the soil has less tidal influence and interactions with salty sea water
+
+-   pH and bulk density of the soil are directly proportional
+
+-   there is no relationship between dry vegetation and elevation
+
+    -   this is surprising, since we would expect to see higher amounts of dry vegetation per meter at high elevations
+
+-   there is clear differences between plots at NCOS and COPR, since those plots are clustered closer together
+
+## screeplot now
+
+```{r}
+#| fig-cap: "Figure 2. Screeplot showing the distribution of percentage that each principle component explains."
+
+
+sd_vec <- wetland_pca$sdev
+var_vec <- sd_vec^2 ### standard deviation is sqrt of variance!
+pc_names <- colnames(wetland_pca$rotation)
+
+pct_expl_df <- data.frame(v = var_vec,
+                          pct_v = var_vec / sum(var_vec),
+                          pc = pc_names) %>%
+  mutate(pct_lbl = paste0(round(pct_v*100, 1), '%'))
+
+ggplot(pct_expl_df, aes(x = reorder(pc, -pct_v), y = v)) +
+  geom_col(fill = "skyblue", color = "black") +
+  geom_text(aes(label = pct_lbl), vjust = 0, nudge_y = .002) +
+  labs(x = 'Principal component', y = 'Variance explained')+
+  theme_minimal()+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+Screeplot summary:
+
+-   the screeplot helps us to determine how many principal components to keep, and which ones, for our PCA analysis
+
+-   PC1 explains 36.5% of variance, and PC2 explains 18.4% of variance.
+
+-   usually you want the selected principal components to explain 80% of the variance, so PC3 and PC4 should also be included

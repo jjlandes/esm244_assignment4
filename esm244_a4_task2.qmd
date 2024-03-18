@@ -1,0 +1,113 @@
+---
+title: "ESM 244 Assignment 4 task2"
+author: "Jesse Landesman"
+format: 
+  html:
+    code-fold: true
+    embed-resources: true
+editor: visual
+theme: lux
+execute:
+  warning: false
+  error: false
+---
+
+```{r}
+library(tidyverse)
+library(here)
+# Packages for cluster analysis:
+library(NbClust)
+library(cluster)
+library(factoextra)
+library(dendextend)
+library(ggdendro)
+```
+
+# Overview
+
+The Santa Barbara Coastal Long Term Ecological Research (SBCLTER) has been part of NSF's Long Term Ecological Research since it was established in 1980. Specifically, this analysis will be using the stream chemistry measurements, which are taken in Santa Barbara watersheds starting in 2000. These stream samples are collected weekly during non-storm events in winter, and biweekly in the summer.
+
+## sumary of the dataset
+
+Here are the numeric stream chemistry variables that are used in the clustering analysis:
+
+-    NH4_uM: ammonium measured in micro-moles per liter
+
+-   NO3_uM: nitrate, measured as nitrite + nitrate in micro-moles per liter
+
+-   PO4_uM: phosphorus, measured in micro-moles per liter
+
+-   tdn_uM: total dissolved nitrogen, measured in micro-moles per liter
+
+-   tdp_uM: total dissolved phosphorus, measured in micro-moles per liter
+
+-   spec_cond_uSpercm: specific conductivity, measured at 25 degrees Celsius in micro-Siemens per centimeter
+
+**Citation:** *Santa Barbara Coastal LTER and J. Melack. 2019. SBC LTER: Land: Stream chemistry in the Santa Barbara Coastal drainage area, ongoing since 2000 ver 16. Environmental Data Initiative. https://doi.org/10.6073/pasta/67a558a24ceed9a0a5bf5e46ab841174 (Accessed 2024-03-12).*
+
+## purpose of the analysis
+
+The purpose of this analysis is to group the site IDs, characterized by the relative distance upstream, by various stream chemistry properties. We will use hierarchical clustering for this analysis, meaning we start from the bottom, treating each site ID as unique, and cluster them up from there. We can then create clusters of site IDs to show which sites are more similar and which are more different.
+
+## pseudocode
+
+-   read in the Santa Barbara Channel LTER stream chemistry data, and change the -999 values to 'NA'
+-   use the summary() function to find out which columns have too many NAs
+-   drop the columns with over 50% NA data
+-   select only the numerical values, so drop the site_id column
+-   create a distance matrix using method = 'euclidean' for the distance calculation
+-   create a dendrogram after using complete linkage hierarchical clustering
+
+```{r}
+lter_df <- read_csv(here('data', 'sbc_lter_registered_stream_chemistry.csv'),
+                    na = '-999')
+
+# summary(lter_df)
+```
+
+```{r}
+# dropping columns with more than 14000 NAs
+lter_complete <- lter_df %>% 
+  select(-tpc_uM, -tpn_uM, -tpp_uM, -tss_mgperLiter, -timestamp_local) %>%
+  group_by(site_code) %>% 
+  summarize_all(mean, na.rm = TRUE)
+
+lter_updated_df <- lter_complete %>% 
+  select(-site_code)
+
+lter_updated_df <- lter_updated_df %>% 
+  drop_na() %>% 
+  scale()
+```
+
+```{r}
+#| fig-cap: "Figure 1. Dendogram showing hierarchical clustering of stream chemistry site IDs by complete linkage method."
+
+
+lter_dist <- dist(lter_updated_df, method = 'euclidean')
+
+# Hierarchical clustering (complete linkage)
+lter_hc_complete <- hclust(lter_dist, method = "complete")
+
+# Plot it (base plot):
+plot(lter_hc_complete, cex = 0.6, hang = -1)
+
+# ggdendrogram(lter_hc_complete, rotate = TRUE)
+```
+
+From this hierarchical clustering dendrogram using complete linkage, we can glean the following: \* Site IDs 6, 11, 9, 10, and 13 have more similar characteristics \* Site IDs 3 and 4 are more different than most other sites in this analysis \* Site IDs 5, 8, 12, 7, and 1 are more similar and can be grouped into their own cluster \* there is no clear number of clusters that make the most sense, but there are two groups of site IDs that have more similar characteristics
+
+```{r}
+#| fig-cap: "Figure 2. Dendogram showing hierarchical clustering using single linkage."
+
+
+lter_dist <- dist(lter_updated_df, method = 'euclidean')
+
+# Hierarchical clustering (single linkage)
+lter_hc_single <- hclust(lter_dist, method = "single")
+
+# Plot it (base plot):
+plot(lter_hc_single, cex = 0.6, hang = -1)
+```
+
+The dendrogram using the complete linkage method looks quite different from the dendrogram using single linkage. There is a larger difference in heights between levels for the single linkage method.
